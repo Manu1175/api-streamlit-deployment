@@ -1,15 +1,16 @@
 import streamlit as st
 from PIL import Image
 from catboost import CatBoostRegressor
-#from preprocessing import cleaning_data as cd
-#from predict.prediction import predict_price as predict
 import pandas as pd
 import plotly.express as px
 import time
 import joblib
+import json
 
 from preprocessing.cleaning_data import preprocess
 from predict.prediction import predict_price
+
+import numpy as np
 
 # ---------- PAGE CONFIGURATION ----------
 st.set_page_config(
@@ -100,6 +101,7 @@ elif page == "📈 Predict":
             swimming_pool = st.checkbox("Swimming Pool", value=False)
 
         submitted = st.form_submit_button("💰 Predict Price")
+        input_data = {}
 
         if submitted:
             input_data = {
@@ -114,60 +116,54 @@ elif page == "📈 Predict":
                 "zip_code": zip_code
             }
 
-        try:
-            st.info("🔄 Preprocessing data locally...")
-            processed = preprocess(input_data)
+            try:
+                st.info("🔄 Preprocessing data locally...")
+                processed = preprocess(input_data)
 
-            st.info("🤖 Predicting price locally...")
-            price = predict_price(processed)
+                st.info("🤖 Predicting price locally...")
+                price = predict_price(processed)
 
-            st.success(f"💶 Estimated property price: **€{price:,.0f}**")
+                st.success(f"💶 Estimated property price: **€{price:,.0f}**")
 
-        except Exception as e:
-            st.error(f"❌ Error during local prediction: {e}")
-
-            
+            except Exception as e:
+                st.error(f"❌ Error during local prediction: {e}")
 
 # ---------- VISUALIZE ----------
+
 elif page == "📊 Visualize":
-    st.write("### 📊 Visualize Predicted Prices by Region")
+    st.write("### 📊 Visualize Predictions on a Map")
 
     try:
+        # 1️⃣ Load your cleaned data
         df = pd.read_csv("data/data_cleaned.csv")
         st.write(f"✅ Loaded {len(df)} properties for visualization.")
 
+        # 2️⃣ Load your trained model
+        model = joblib.load("model/catboost.joblib")
+
+        # 3️⃣ Take a sample if needed
         sample_df = df.sample(n=min(st.session_state.sample_size, len(df)), random_state=42)
 
+        # 4️⃣ Predict batch function
         def predict_batch(row):
             input_dict = {
-                "habitablesurface": row["habitablesurface"],
-                "bedroomcount": row["bedroomcount"],
-                "zip_code": row.get("zip_code", 1000),
-                "property_type": "HOUSE" if row["type_encoded"] == 1 else "APARTMENT",
+                "rooms_number": row["bedroomcount"],
+                "area": row["habitablesurface"],
+                "lift": row.get("haslift", 0),
+                "garden": row.get("hasgarden", 0),
+                "swimming_pool": row.get("hasswimmingpool", 0),
+                "terrace": row.get("hasterrace", 0),
                 "building_state": "GOOD",
-                "hasterrace": row.get("hasterrace", 0),
-                "hasgarden": row.get("hasgarden", 0),
-                "hasswimmingpool": row.get("hasswimmingpool", 0),
+                "property_type": "HOUSE" if row["type_encoded"] == 1 else "APARTMENT",
+                "zip_code": row.get("zip_code", 1000)
             }
+            processed = preprocess(input_dict)
+            return model.predict(processed)[0]
 
-            # ---------- Apply settings manually ----------
-            input_dict_adapted = input_dict.copy()
-            if not st.session_state.use_region:
-                input_dict_adapted["zip_code"] = 9999
-            if not st.session_state.use_lat_long:
-                input_dict_adapted["zip_code"] = "0000"
-
-            try:
-                processed = cd.preprocess(input_dict_adapted)
-                return predict(processed)
-            except:
-                return None
-
+        # 5️⃣ Show progress bar
         st.info("Generating predictions, please wait...")
-
         predictions = []
-        start_time = time.time()
-        total = max(len(sample_df), 1)
+        total = len(sample_df)
 
         if st.session_state.show_progress:
             progress_bar = st.progress(0, text="Starting predictions...")
@@ -180,11 +176,12 @@ elif page == "📊 Visualize":
                 progress_bar.progress(progress, text=f"Processing {i + 1}/{total}")
 
         sample_df["PredictedPrice"] = predictions
+        # transform log price
+        sample_df["PredictedPrice"] = np.expm1(sample_df["PredictedPrice"])
+        sample_df["PredictedPrice"] = sample_df["PredictedPrice"].round(0).astype(int)
+        st.success("✅ Predictions complete!")
 
-        end_time = time.time()
-        minutes, seconds = divmod(end_time - start_time, 60)
-        st.success(f"✅ Predictions generated in {int(minutes)} min {int(seconds)} sec.")
-
+        # 6️⃣ Add region and property type
         def get_region(row):
             if row.get("region_Brussels", 0) == 1:
                 return "Brussels"
@@ -195,67 +192,39 @@ elif page == "📊 Visualize":
             else:
                 return "Unknown"
 
-        def get_property_type(row):
-            return "HOUSE" if row.get("type_encoded") == 1 else "APARTMENT"
-
         sample_df["Region"] = sample_df.apply(get_region, axis=1)
-        sample_df["Property Type"] = sample_df.apply(get_property_type, axis=1)
+        sample_df["Property Type"] = sample_df["type_encoded"].apply(lambda x: "HOUSE" if x == 1 else "APARTMENT")
 
-        # Plot according to viz_type
-        if st.session_state.viz_type == "Histogram":
-            fig = px.histogram(
-                sample_df.dropna(subset=["PredictedPrice"]),
-                x="Region",
-                y="PredictedPrice",
-                color="Property Type",
-                nbins=50,
-                histfunc="avg",
-                title="Average Predicted Price per Property Type and Region",
-                labels={"PredictedPrice": "Predicted Price (€)"},
-                color_discrete_sequence=px.colors.qualitative.Set2
+        # 7️⃣ Plot MAP (if you have lat/long)
+        if "latitude" in sample_df.columns and "longitude" in sample_df.columns:
+            fig = px.scatter_map(
+                sample_df,
+                lat="latitude",
+                lon="longitude",
+                color="PredictedPrice",
+                size="PredictedPrice",
+                #hover_name="zip_code",
+                hover_data=["Region", "Property Type"],
+                color_continuous_scale=px.colors.sequential.Viridis,
+                size_max=15,
+                zoom=7,
+                title="Predicted Prices on Map"
             )
-        else:  # Boxplot
-            fig = px.box(
-                sample_df.dropna(subset=["PredictedPrice"]),
-                x="Region",
-                y="PredictedPrice",
-                color="Property Type",
-                title="Predicted Price Distribution per Property Type and Region",
-                labels={"PredictedPrice": "Predicted Price (€)"},
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
+            fig.update_layout(mapbox_style="open-street-map")
+            fig.update_layout(margin={"r":0,"t":50,"l":0,"b":0})
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("❗ Latitude/Longitude columns missing. Cannot plot map.")
 
-        st.plotly_chart(fig, use_container_width=True)
+        # 8️⃣ Let user download CSV
+        csv = sample_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "💾 Download Predictions CSV",
+            csv,
+            "predicted_properties.csv",
+            "text/csv"
+        )
 
     except Exception as e:
         st.error(f"❌ Could not generate visualization: {e}")
         st.exception(e)
-
-# ---------- SETTINGS ----------
-elif page == "⚙️ Settings":
-    st.write("### ⚙️ Settings")
-
-    st.subheader("Prediction Preferences")
-    st.session_state.use_lat_long = st.checkbox("Use Latitude/Longitude Features", value=st.session_state.use_lat_long)
-    st.session_state.use_region = st.checkbox("Use Region Features", value=st.session_state.use_region)
-    st.session_state.sample_size = st.number_input("Sample Size for Visualization", min_value=10, max_value=5000, value=st.session_state.sample_size)
-
-    st.subheader("Interface Preferences")
-    st.session_state.theme = st.radio("Choose Theme", ["Light", "Dark"], index=["Light", "Dark"].index(st.session_state.theme))
-    st.session_state.show_progress = st.checkbox("Show Progress Bar in Visualize", value=st.session_state.show_progress)
-    st.session_state.viz_type = st.selectbox("Visualization Type", ["Histogram", "Boxplot"], index=["Histogram", "Boxplot"].index(st.session_state.viz_type))
-
-    if st.button("Reset to Defaults"):
-        st.session_state.use_lat_long = True
-        st.session_state.use_region = True
-        st.session_state.theme = "Light"
-        st.session_state.show_progress = True
-        st.session_state.viz_type = "Histogram"
-        st.session_state.sample_size = 500
-        st.success("Settings have been reset. Please reload the page to apply.")
-
-    st.info("⚡ All settings are currently local and will persist during your session.")
-
-# ---------- FOOTER ----------
-st.markdown("---")
-st.markdown("<center>ImmoEliza © 2025 - Powered by Streamlit</center>", unsafe_allow_html=True)
