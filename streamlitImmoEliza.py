@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ---------- IMAGE BANNER ----------
-image = Image.open("ImmoEliza.png")
+image = Image.open("utils/ImmoEliza.png")
 st.image(image, use_container_width=True)
 
 # ---------- TITLE ----------
@@ -52,22 +52,7 @@ st.markdown("""
 
 # ---------- SIDEBAR ----------
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["🏠 Home", "📈 Predict", "📊 Visualize", "⚙️ Settings"])
-
-
-# ---------- INIT SETTINGS ----------
-if "use_lat_long" not in st.session_state:
-    st.session_state.use_lat_long = True
-if "use_region" not in st.session_state:
-    st.session_state.use_region = True
-if "theme" not in st.session_state:
-    st.session_state.theme = "Light"
-if "show_progress" not in st.session_state:
-    st.session_state.show_progress = True
-if "viz_type" not in st.session_state:
-    st.session_state.viz_type = "Histogram"
-if "sample_size" not in st.session_state:
-    st.session_state.sample_size = 500
+page = st.sidebar.radio("Go to", ["🏠 Home", "📈 Predict", "📊 Visualize"])
 
 # ---------- HOME ----------
 if page == "🏠 Home":
@@ -77,7 +62,6 @@ if page == "🏠 Home":
     Navigate using the sidebar:
     - **Predict** to estimate your property's price.
     - **Visualize** to analyze market data.
-    - **Settings** to adjust your preferences.
     """)
 
 # ---------- PREDICT ----------
