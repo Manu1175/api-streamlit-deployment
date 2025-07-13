@@ -78,11 +78,13 @@ elif page == "📈 Predict":
             zip_code = st.number_input("Zip code", min_value=1000, max_value=9992, value=1000)
         with col2:
             property_type = st.selectbox("Property Type", ["APARTMENT", "HOUSE"])
+            epc_score = st.selectbox('EPC Score', ['A++', 'A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G'])
             building_state = st.selectbox("Building Condition", [
                 "NEW", "GOOD", "JUST RENOVATED", "TO BE DONE UP", "TO RENOVATE", "TO RESTORE"
             ])
             lift = st.checkbox("Lift", value=False)
             terrace = st.checkbox("Terrace", value=False)
+            parking = st.checkbox('Parking', value = False)
             garden = st.checkbox("Garden", value=False)
             swimming_pool = st.checkbox("Swimming Pool", value=False)
 
@@ -97,6 +99,8 @@ elif page == "📈 Predict":
                 "garden": garden,
                 "swimming_pool": swimming_pool,
                 "terrace": terrace,
+                'parking': parking,
+                'epc score': epc_score,
                 "building_state": building_state,
                 "property_type": property_type,
                 "zip_code": zip_code

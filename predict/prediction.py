@@ -3,7 +3,7 @@ import joblib
 import numpy as np
 
 # Load the model once at module level
-model = joblib.load("model/catboost.joblib")
+model = joblib.load("model/ego_catboost.joblib")
 
 def predict_price(data: np.ndarray) -> float:
     """Make a price prediction from preprocessed input"""
