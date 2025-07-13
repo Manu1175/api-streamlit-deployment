@@ -121,6 +121,13 @@ elif page == "📈 Predict":
 elif page == "📊 Visualize":
     st.write("### 📊 Visualize Predictions on a Map")
 
+    # Initialize session_state keys if they don't exist
+    if "sample_size" not in st.session_state:
+        st.session_state.sample_size = 100  # or any default
+
+    if "show_progress" not in st.session_state:
+        st.session_state.show_progress = True  # or False
+    
     try:
         # 1️⃣ Load your cleaned data
         df = pd.read_csv("data/data_cleaned.csv")
