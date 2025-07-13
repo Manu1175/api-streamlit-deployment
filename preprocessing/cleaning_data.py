@@ -53,6 +53,10 @@ def preprocess(input_dict: dict):
 
     # Create DataFrame
     df = pd.DataFrame([input_dict])
+    
+    for col in df.columns:
+        if col.strip().lower().replace(' ', '_') == "epc_score":
+            df.rename(columns={col: "epc_score"}, inplace=True)
 
     # Fill missing optional fields with defaults
     optional_fields = {
@@ -60,6 +64,8 @@ def preprocess(input_dict: dict):
         "garden": False,
         "swimming_pool": False,
         "terrace": False,
+        'parking': False,
+        'epc_score': 'D',
         "building_state": 'TO BE DONE UP'
     }
     for key, default in optional_fields.items():
@@ -68,11 +74,25 @@ def preprocess(input_dict: dict):
         df[key] = df[key].fillna(default)
 
     # Boolean fields to int
-    bool_fields = ['lift', "garden", "swimming_pool", "terrace"] # parking
+    bool_fields = ['lift', "garden", "swimming_pool", "terrace", 'parking'] # parking
     for field in bool_fields:
         df[field] = df[field].astype(int)
     
     # Pre processing EPC Score and Building condition
+    df["epc_score"] = df["epc_score"].map({ 
+            'A++': 0, 
+            'A+': 1, 
+            'A': 2, 
+            'B': 3, 
+            'C': 4,
+            'D': 5, 
+            'E': 6,
+            'F': 7,
+            'G': 8
+     })
+    if df["epc_score"].isna().any():
+        raise ValueError("Invalid epc_score")
+    
     df["building_state"] = df["building_state"].map({
         "NEW": 0,
         "JUST RENOVATED": 1,
